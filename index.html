@@ -174,10 +174,14 @@
   .ventas-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
   .ventas-filter{padding:8px 12px;background:var(--bg);border:1.5px solid rgba(91,75,138,0.3);border-radius:var(--radius-sm);color:var(--text);font-size:13px;outline:none;min-height:38px;}
   .ventas-filter:focus{border-color:var(--price-color);}
-  .btn-clear-ventas{padding:8px 14px;background:rgba(255,107,107,0.15);color:var(--warn);border:1px solid rgba(255,107,107,0.3);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:600;transition:background 0.2s;white-space:nowrap;}
+  .btn-clear-ventas{padding:8px 14px;background:rgba(255,107,107,0.15);color:var(--warn);border:1px solid rgba(255,107,107,0.3);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:600;transition:background 0.2s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
   .btn-clear-ventas:hover{background:rgba(255,107,107,0.3);}
   .btn-manual-venta{padding:8px 14px;background:var(--btn-primary);color:#fff;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition:opacity 0.2s;}
   .btn-manual-venta:hover{opacity:.85;}
+  .btn-save-history{padding:8px 14px;background:linear-gradient(135deg,#1a7a4a,#22a05a);color:#fff;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition:opacity 0.2s,transform 0.1s;box-shadow:0 2px 10px rgba(34,160,90,0.3);white-space:nowrap;}
+  .btn-save-history:hover{opacity:.88;transform:scale(1.03);}
+  .btn-print-report{padding:8px 14px;background:var(--ticket-btn);color:#fff;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;transition:opacity 0.2s,transform 0.1s;white-space:nowrap;}
+  .btn-print-report:hover{opacity:.88;transform:scale(1.03);}
   .ventas-table{width:100%;border-collapse:collapse;}
   .ventas-table th{text-align:left;font-size:11px;color:var(--text-sub);font-weight:700;padding:10px 12px;border-bottom:2px solid rgba(91,75,138,0.25);text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;}
   .ventas-table td{padding:12px;border-bottom:1px solid rgba(91,75,138,0.1);font-size:13px;vertical-align:middle;}
@@ -395,7 +399,9 @@
           <option value="manual">Manuales</option>
         </select>
         <button class="btn-manual-venta" onclick="openModal()"><i class="fa-solid fa-plus"></i> Ingreso Manual</button>
-        <button class="btn-clear-ventas" onclick="clearAllVentas()"><i class="fa-solid fa-trash-can"></i> Borrar Todo</button>
+        <button class="btn-save-history" onclick="saveHistoryBackup()"><i class="fa-solid fa-cloud-arrow-down"></i> Guardar Historial</button>
+        <button class="btn-print-report" onclick="printReport()"><i class="fa-solid fa-file-chart-column"></i> Imprimir Reporte</button>
+        <button class="btn-clear-ventas" onclick="clearAllVentas()"><i class="fa-solid fa-trash-can"></i> Borrar Historial</button>
       </div>
       <div style="overflow-x:auto;">
         <table class="ventas-table">
@@ -831,12 +837,18 @@ function saveManualVenta(){
   const fecha=d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
   const now=new Date();
   const hora=now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
-  const v={id:Date.now(),fecha,hora,isoFecha:fechaVal||now.toISOString().split('T')[0],desc,tipo:'manual',articulos:'-',monto};
+  const isoFecha=fechaVal||now.toISOString().split('T')[0];
+  const v={id:Date.now(),fecha,hora,isoFecha,desc,tipo:'manual',articulos:'-',monto};
   ventas.unshift(v);
   saveVentas();
   closeModal();
   document.getElementById('m-desc').value='';
   document.getElementById('m-monto').value='';
+  // BUG FIX: si la fecha ingresada queda fuera del filtro activo, ampliar el rango para que se vea
+  const desdeEl=document.getElementById('v-fecha-desde');
+  const hastaEl=document.getElementById('v-fecha-hasta');
+  if(desdeEl.value && isoFecha < desdeEl.value) desdeEl.value = isoFecha;
+  if(hastaEl.value && isoFecha > hastaEl.value) hastaEl.value = isoFecha;
   renderVentas(); updateVentasStats();
   showToast('✅ Ingreso manual registrado: $'+monto.toFixed(2));
 }
@@ -886,12 +898,109 @@ function deleteVenta(id){
  
 function clearAllVentas(){
   if(!ventas.length){showToast('⚠️ No hay registros que borrar');return;}
-  if(!confirm(`¿Eliminar TODOS los ${ventas.length} registros de ventas? Esta acción no se puede deshacer.`))return;
+  if(!confirm(`¿Estás seguro de que quieres BORRAR todo el historial?\n\n${ventas.length} registro(s) serán eliminados permanentemente.\n\nEsta acción NO se puede deshacer.`))return;
+  if(!confirm('⚠️ Segunda confirmación:\n\n¿Confirmas que deseas borrar TODO el historial de ventas? No habrá forma de recuperarlo.'))return;
   ventas=[];
   saveVentas();
   renderVentas();
   updateVentasStats();
-  showToast('🗑️ Todos los registros eliminados');
+  showToast('🗑️ Historial completo eliminado');
+}
+ 
+/* ─── GUARDAR HISTORIAL (descarga JSON) ─── */
+function saveHistoryBackup(){
+  if(!ventas.length){showToast('⚠️ No hay registros para guardar');return;}
+  const now=new Date();
+  const stamp=now.toISOString().replace(/[:.]/g,'-').slice(0,16);
+  const data={exportado:now.toLocaleString('es-MX'),total_registros:ventas.length,ventas};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`historial-ventas-${stamp}.json`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('💾 Historial guardado como archivo JSON');
+}
+ 
+/* ─── IMPRIMIR REPORTE DE VENTAS ─── */
+function printReport(){
+  const list=filteredVentas();
+  if(!list.length){showToast('⚠️ No hay registros para imprimir');return;}
+  const now=new Date();
+  const fechaImp=now.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const horaImp=now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+  const desde=document.getElementById('v-fecha-desde').value;
+  const hasta=document.getElementById('v-fecha-hasta').value;
+  const tipo=document.getElementById('v-tipo').value;
+ 
+  let total=0;
+  const rows=list.map((v,i)=>{
+    total+=parseFloat(v.monto)||0;
+    return `<tr>
+      <td>${list.length-i}</td>
+      <td>${v.fecha}<br><span style="font-size:10px;color:#666;">${v.hora}</span></td>
+      <td style="max-width:220px;font-size:11px;">${v.desc}</td>
+      <td><span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${v.tipo==='auto'?'#e8f5e9':'#f3e8ff'};color:${v.tipo==='auto'?'#2e7d32':'#5b4b8a'};">${v.tipo==='auto'?'Auto':'Manual'}</span></td>
+      <td style="text-align:center;">${v.articulos}</td>
+      <td style="text-align:right;font-weight:700;">$${parseFloat(v.monto).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+ 
+  const filtroDesc=[];
+  if(desde) filtroDesc.push('Desde: '+desde);
+  if(hasta) filtroDesc.push('Hasta: '+hasta);
+  if(tipo)  filtroDesc.push('Tipo: '+tipo);
+ 
+  const html=`<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8"><title>Reporte de Ventas · Edward-Night</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:#fff;color:#111;padding:24px;font-size:13px;}
+  .report-header{border-bottom:3px solid #1f3b73;padding-bottom:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;}
+  .report-header h1{font-family:'Space Mono',monospace;font-size:20px;color:#1f3b73;}
+  .report-header p{font-size:11px;color:#555;line-height:1.6;}
+  .report-meta{font-size:11px;color:#555;margin-bottom:14px;padding:8px 12px;background:#f5f5f5;border-radius:6px;}
+  table{width:100%;border-collapse:collapse;}
+  th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;background:#1f3b73;color:#fff;text-align:left;}
+  th:last-child{text-align:right;}
+  td{padding:8px 10px;border-bottom:1px solid #e5e5e5;vertical-align:middle;}
+  tr:nth-child(even) td{background:#fafafa;}
+  .total-row td{font-weight:700;font-family:'Space Mono',monospace;background:#e8f0fe!important;font-size:14px;border-top:2px solid #1f3b73;padding:10px;}
+  .total-row td:last-child{text-align:right;font-size:16px;color:#1f3b73;}
+  .report-footer{margin-top:20px;font-size:10px;color:#999;text-align:center;border-top:1px solid #eee;padding-top:10px;}
+  @media print{body{padding:10px;} .no-print{display:none;}}
+</style>
+</head><body>
+<div class="report-header">
+  <div>
+    <h1>🖨️ EDWARD-NIGHT</h1>
+    <p>Papelería y Ciber · Reporte de Ventas</p>
+  </div>
+  <div style="text-align:right;">
+    <p style="font-size:11px;color:#555;">Impreso: ${fechaImp} ${horaImp}</p>
+    <p style="font-size:11px;color:#555;">${list.length} registro(s) mostrados</p>
+  </div>
+</div>
+${filtroDesc.length?`<div class="report-meta">📅 Filtros aplicados: ${filtroDesc.join(' · ')}</div>`:'<div class="report-meta">📅 Filtros aplicados: Todos los registros</div>'}
+<table>
+  <thead>
+    <tr><th>#</th><th>Fecha / Hora</th><th>Descripción</th><th>Tipo</th><th style="text-align:center;">Artículos</th><th style="text-align:right;">Monto</th></tr>
+  </thead>
+  <tbody>
+    ${rows}
+    <tr class="total-row">
+      <td colspan="5">TOTAL (${list.length} venta${list.length!==1?'s':''})</td>
+      <td>$${total.toFixed(2)}</td>
+    </tr>
+  </tbody>
+</table>
+<div class="report-footer">Edward-Night © 2025 · Precios sujetos a cambios sin previo aviso.</div>
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>`;
+ 
+  const win=window.open('','_blank','width=800,height:700,scrollbars=yes');
+  win.document.write(html);
+  win.document.close();
 }
  
 function updateVentasStats(){
