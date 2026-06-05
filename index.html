@@ -363,7 +363,7 @@ footer{text-align:center;padding:20px;color:var(--text-sub);font-size:13px;borde
           <option value="manual">Manuales</option>
         </select>
         <button class="btn-manual-venta" onclick="openModal()"><i class="fa-solid fa-plus"></i> Ingreso Manual</button>
-        <button class="btn-save-history" onclick="saveHistoryBackup()"><i class="fa-solid fa-cloud-arrow-down"></i> Guardar Historial</button>
+        <button class="btn-save-history" onclick="saveHistoryBackup()"><i class="fa-solid fa-floppy-disk"></i> Guardar Historial</button>
         <button class="btn-print-report" onclick="printReport()"><i class="fa-solid fa-file-chart-column"></i> Imprimir Reporte</button>
         <button class="btn-clear-ventas" onclick="clearAllVentas()"><i class="fa-solid fa-trash-can"></i> Borrar Historial</button>
       </div>
@@ -510,13 +510,15 @@ function init(){
   setInterval(updateClock,1000);
   renderProducts();
   updateOrderPanel();
+  // Rango de fechas: desde la venta más antigua hasta hoy, para no ocultar registros guardados
   const now=new Date();
-  const y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0');
-  document.getElementById('v-fecha-desde').value=`${y}-${m}-01`;
-  const last=new Date(y,now.getMonth()+1,0);
-  document.getElementById('v-fecha-hasta').value=`${y}-${m}-${String(last.getDate()).padStart(2,'0')}`;
+  const hoyStr=now.toISOString().split('T')[0];
+  const fechasValidas=ventas.map(v=>v.isoFecha).filter(f=>f&&f!=='N/A').sort();
+  const desdeStr=fechasValidas.length?fechasValidas[0]:(hoyStr.slice(0,7)+'-01');
+  document.getElementById('v-fecha-desde').value=desdeStr;
+  document.getElementById('v-fecha-hasta').value=hoyStr;
   // Set default date in modal
-  document.getElementById('m-fecha').value=now.toISOString().split('T')[0];
+  document.getElementById('m-fecha').value=hoyStr;
 }
  
 function saveProducts(){localStorage.setItem('en_products',JSON.stringify(products));}
@@ -919,15 +921,12 @@ function clearAllVentas(){
 /* ─── GUARDAR HISTORIAL ─── */
 function saveHistoryBackup(){
   if(!ventas.length){showToast('⚠️ No hay registros para guardar');return;}
+  // El historial se guarda automáticamente en esta página (localStorage).
+  // Esta función confirma que los datos están persistidos.
+  saveVentas();
   const now=new Date();
-  const stamp=now.toISOString().replace(/[:.]/g,'-').slice(0,16);
-  const data={exportado:now.toLocaleString('es-MX'),total_registros:ventas.length,ventas};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url; a.download=`historial-ventas-${stamp}.json`; a.click();
-  URL.revokeObjectURL(url);
-  showToast('💾 Historial guardado como archivo JSON');
+  const hora=now.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+  showToast('✅ Historial guardado en la página · '+ventas.length+' registros · '+hora);
 }
  
 /* ─── IMPRIMIR REPORTE ─── */
