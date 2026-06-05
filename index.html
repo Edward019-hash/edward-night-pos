@@ -306,6 +306,7 @@
   <button class="nav-item" data-cat="Servicios Digitales" onclick="selectCat(this)">💻 Servicios Digitales</button>
   <button class="nav-item" data-cat="Papelería" onclick="selectCat(this)">📚 Papelería</button>
   <button class="nav-item" data-cat="Enmicados" onclick="selectCat(this)">🔒 Enmicados</button>
+  <button class="nav-item" data-cat="Otros" onclick="selectCat(this)">🗂️ Otros</button>
   <button class="nav-item" data-cat="ventas" onclick="selectCat(this)">📊 Registro de Ventas</button>
   <button class="nav-item" data-cat="admin" onclick="selectCat(this)">⚙️ Administrar Productos</button>
 </nav>
@@ -585,6 +586,7 @@ const CAT_TITLES={
   "Servicios Digitales":"💻 Servicios Digitales",
   "Papelería":"📚 Papelería",
   "Enmicados":"🔒 Enmicados",
+  "Otros":"🗂️ Otros",
 };
 function selectCat(el){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
@@ -922,7 +924,18 @@ function updateVentasStats(){
    ─── ADMIN & GUARDAR TODO ───────────────────────
    ═══════════════════════════════════════════════════ */
  
-function getCategories(){return[...new Set(products.map(p=>p.cat))].sort();}
+function getCategories(){
+  const fixed=["Impresiones y Copias","Hojas y Materiales","Productos Personalizados","Servicios Digitales","Papelería","Enmicados","Otros"];
+  const fromProducts=[...new Set(products.map(p=>p.cat))];
+  return [...new Set([...fixed,...fromProducts])].sort((a,b)=>{
+    // Keep fixed order for known cats, extras at end
+    const ai=fixed.indexOf(a), bi=fixed.indexOf(b);
+    if(ai>=0&&bi>=0)return ai-bi;
+    if(ai>=0)return -1;
+    if(bi>=0)return 1;
+    return a.localeCompare(b);
+  });
+}
  
 function populateCatSelect(){
   const sel=document.getElementById('new-cat');
